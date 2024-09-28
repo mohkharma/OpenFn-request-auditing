@@ -1,0 +1,77 @@
+name: test
+description: null
+credentials:
+  m.alalem@ubs-tech.com-test_db:
+    name: test_db
+    owner: m.alalem@ubs-tech.com
+workflows:
+  test:
+    name: test
+    jobs:
+      New-job:
+        name: New job
+        adaptor: '@openfn/language-postgresql@latest'
+        credential: m.alalem@ubs-tech.com-test_db
+        body: |
+          // Ensure the data is valid
+          fn(state => {
+            const { id, name, body } = state.data; // Extract the incoming data
+          
+            // Ensure required fields are present
+            if (!id || !name || !body) {
+              throw new Error('Missing required fields: id, name, body');
+            }
+          
+            console.log(`Received data: id=${id}, name=${name}, body=${body}`);
+            return state;
+          });
+          
+          
+          
+          // Insert data into PostgreSQL
+          // postgres({
+          //   query: `
+          //     INSERT INTO public.test (id, name, body)
+          //     VALUES ($1, $2, $3)
+          //   `,
+          //   params: [
+          //     state.data.id, // Map data to query parameters
+          //     state.data.name,
+          //     state.data.body
+          //   ]
+          // });
+          
+          
+          insert('test', { name: state.data.name, id: state.data.id }, { setNull: "'NaN'", logValues: true });
+      db_insert:
+        name: db_insert
+        adaptor: '@openfn/language-common@latest'
+        credential: m.alalem@ubs-tech.com-test_db
+        body: |
+          fn(state => {
+            console.log('Insert successful, returning response.');
+            return {
+              status: 200,
+              body: {
+                message: 'Data inserted successfully',
+                id: state.data.id,
+                name: state.data.name
+              }
+            };
+          });
+          
+    triggers:
+      webhook:
+        type: webhook
+        enabled: true
+    edges:
+      webhook->New-job:
+        source_trigger: webhook
+        target_job: New-job
+        condition_type: always
+        enabled: true
+      New-job->db_insert:
+        source_job: New-job
+        target_job: db_insert
+        condition_type: on_job_success
+        enabled: true
